@@ -197,22 +197,19 @@ class SearchBlogView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        query = request.GET.get("q", "").strip()  
+        query = request.query_params.get('query', None)
         user = request.user
 
-        if not query: 
+        if not query:
             return Response({"detail": "Please provide a search query."}, status=status.HTTP_400_BAD_REQUEST)
 
-       
         blogs = Blog.objects.filter(title__icontains=query)
 
-        
-        accessible_blogs = blogs.filter(
-            Q(private_blog=False) |  
-            Q(user=user) |  
-            Q(BlogAccess__receiver=user, BlogAccess__approved=True)
+        blogs = blogs.filter(
+            Q(private_blog=False) |
+            Q(private_blog=True, user__in=BlogAccess.objects.filter(receiver=user, approved=True).values('giver'))
         ).distinct()
 
-        serialized_blogs = BlogSerializers(accessible_blogs, many=True)
+        ser_data = BlogSerializers(blogs, many=True)
+        return Response(ser_data.data, status=status.HTTP_200_OK)
 
-        return Response(serialized_blogs.data, status=status.HTTP_200_OK)
